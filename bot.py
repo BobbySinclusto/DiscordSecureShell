@@ -72,8 +72,11 @@ async def output_reader(proc, loop):
 
         current = line.decode('utf-8')
 
-        if not bot.is_closed():
-            await ssh_channel.send('```'+current+'```')
+        try:
+            if not bot.is_closed():
+                await ssh_channel.send('```'+current+'```')
+        except Exception as e:
+            print(e)
 
         print(current, end='')
 
@@ -98,6 +101,7 @@ async def startserver(ctx, *args):
         await ctx.send('An ssh client is already running and I haven\'t set up multiprocessing yet, try again later.')
         return
         
+    cmd_ctx = ctx
     server_process = subprocess.Popen(['ssh'] + [i for i in args], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     
     bot.loop.create_task(output_reader(server_process, bot.loop))
@@ -107,7 +111,6 @@ async def startserver(ctx, *args):
 
     channel = await ctx.message.guild.create_text_channel('-'.join(['ssh'] + [i for i in args]))
     ssh_channel = channel
-    cmd_ctx = ctx
 
 for i in range(1000):
     try:
