@@ -2,6 +2,7 @@ import os
 import subprocess
 import sys
 import re
+import time
 import discord
 from discord.ext import commands
 from dotenv import load_dotenv
@@ -23,7 +24,7 @@ addr = ''
 waiting_command_response = False
 cmd_ctx = None
 waiting_for_start = False
-ssh_channel_id = 0
+ssh_channel = None
 
 bot = commands.Bot(command_prefix='!')
 @bot.event
@@ -40,15 +41,16 @@ async def on_ready():
 
 @bot.event
 async def on_message(message):
+    global ssh_channel
     await bot.process_commands(message)
     if message.author == bot.user:
         return
     print(message.content)
     #if message.channel.id == 789625114769621003:
-    if message.channel.id == ssh_channel_id:
+    if message.channel.id == ssh_channel.id:
         # send a line to the process
-        if ssh_channel_id != 0:
-            server_process.stdin.write((message.content).encode())
+        if ssh_channel != None:
+            server_process.stdin.write((message.content + '\n').encode())
             server_process.stdin.flush()
 
 @bot.command(name='ping', help='pong!')
@@ -60,6 +62,7 @@ async def output_reader(proc, loop):
     global waiting_command_response
     global cmd_ctx
     global waiting_for_start
+    global ssh_channel
 
     message = None
     io_pool_exc = ThreadPoolExecutor()
@@ -70,43 +73,7 @@ async def output_reader(proc, loop):
         current = line.decode('utf-8')
 
         if not bot.is_closed():
-            '''
-            player_message = re.search(r'^\[.*\] \[.*\]: (<.*>.*)$', current)
-            if player_message != None:
-                #await bot.get_channel(789625114769621003).send(player_message.groups()[0])
-                await bot.get_channel(761382066360680448).send(player_message.groups()[0])
-
-            player_joined = re.search(r': (.*) joined the game', current)
-            if player_joined != None:
-                #await bot.get_channel(789625114769621003).send(player_joined.groups()[0] + ' joined the game')
-                await bot.get_channel(761382066360680448).send(player_joined.groups()[0] + ' joined the game')            
-                try:
-                    current_players.add(player_joined.groups()[0])
-                except:
-                    pass
-
-            player_left = re.search(r': (.*) left the game', current)
-            if player_left != None:
-                #await bot.get_channel(789625114769621003).send(player_left.groups()[0] + ' left the game')
-                await bot.get_channel(761382066360680448).send(player_left.groups()[0] + ' left the game')
-                try:
-                    current_players.remove(player_left.groups()[0])
-                except:
-                    pass
-            '''
-
-            await cmd_ctx.send(current)
-
-            '''
-            if waiting_for_start and message == None:
-                message = await cmd_ctx.send('```m\n' + current + '```')
-            elif waiting_for_start:
-                await message.edit(content=('```m\n' + current + '```'))
-                if re.search(r'Done \(.*\)!', current):
-                    waiting_for_start = False
-                    message = None
-                    await cmd_ctx.send('Success! Server address: ' + addr + '\n\nIf you are at Austin\'s house, use 192.168.0.113:25566')
-             '''   
+            await ssh_channel.send('```'+current+'```')
 
         print(current, end='')
 
@@ -125,20 +92,21 @@ async def startserver(ctx, *args):
     global addr
     global waiting_for_start
     global cmd_ctx
+    global ssh_channel
 
-    if ssh_channel_id != 0:
+    if ssh_channel != None:
         await ctx.send('An ssh client is already running and I haven\'t set up multiprocessing yet, try again later.')
         return
         
-    server_process = subprocess.Popen(['ssh'] + args, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    server_process = subprocess.Popen(['ssh'] + [i for i in args], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     
     bot.loop.create_task(output_reader(server_process, bot.loop))
     #bot.loop.create_task(my_background_task(ctx, server_process))
     input_thread = threading.Thread(target=input_handler, args=(server_process,))
     input_thread.start()
 
-    channel = await ctx.message.guild.create_text_channel('-'.join(['ssh'] + args))
-    ssh_channel_id = channel.id
+    channel = await ctx.message.guild.create_text_channel('-'.join(['ssh'] + [i for i in args]))
+    ssh_channel = channel
     cmd_ctx = ctx
 
 for i in range(1000):
