@@ -16,7 +16,6 @@ import io
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
 GUILD = os.getenv('DISCORD_GUILD')
-WOLFRAM_API_KEY = os.getenv('WOLFRAM_API_KEY')
 
 server_process = 0
 ngrok_process = 0
